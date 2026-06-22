@@ -34,6 +34,7 @@ export type AiConfig = {
 }
 
 export type AiGeneratePayload = {
+  requestId?: string
   config: AiConfig
   systemPrompt: string
   userPrompt: string
@@ -55,6 +56,7 @@ export type AiReportApi = {
   readCommits: (options: GitReadOptions) => Promise<GitCommit[]>
   generateAiReport: (payload: AiGeneratePayload) => Promise<string>
   testAiConfig: (config: AiConfig) => Promise<string>
+  cancelAiRequests: (requestIdPrefix: string) => Promise<number>
   saveAiConfig: (config: AiConfig) => Promise<void>
   loadAiConfig: () => Promise<Partial<AiConfig> | null>
   saveWorkspace: (data: unknown) => Promise<void>

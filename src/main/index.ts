@@ -48,6 +48,7 @@ type AiConfig = {
 }
 
 type AiGeneratePayload = {
+  requestId?: string
   config: AiConfig
   systemPrompt: string
   userPrompt: string
@@ -63,12 +64,18 @@ type ExportPayload = {
   format: ExportFormat
 }
 
+const aiRequestControllers = new Map<string, AbortController>()
+
 async function readGitBranches(repositoryPath: string): Promise<BranchInfo> {
   assertRepositoryPath(repositoryPath)
 
   const [{ stdout: branchesStdout }, { stdout: currentStdout }] = await Promise.all([
-    execFileAsync('git', ['-C', repositoryPath, 'branch', '--all', '--format=%(refname:short)'], { maxBuffer: 1024 * 1024 }),
-    execFileAsync('git', ['-C', repositoryPath, 'rev-parse', '--abbrev-ref', 'HEAD'], { maxBuffer: 1024 * 1024 })
+    execFileAsync('git', ['-C', repositoryPath, 'branch', '--all', '--format=%(refname:short)'], {
+      maxBuffer: 1024 * 1024
+    }),
+    execFileAsync('git', ['-C', repositoryPath, 'rev-parse', '--abbrev-ref', 'HEAD'], {
+      maxBuffer: 1024 * 1024
+    })
   ])
 
   const branches = branchesStdout
@@ -114,7 +121,8 @@ async function readGitCommits(options: GitReadOptions): Promise<GitCommit[]> {
     .filter(Boolean)
     .map((record) => {
       const [metadata = '', ...fileLines] = record.split(/\r?\n/)
-      const [hash, shortHash, authorName, email, date, subject, body = ''] = metadata.split(FIELD_SEPARATOR)
+      const [hash, shortHash, authorName, email, date, subject, body = ''] =
+        metadata.split(FIELD_SEPARATOR)
 
       return {
         hash,
@@ -139,7 +147,11 @@ async function resolveGitRevision(repositoryPath: string, branch?: string): Prom
 
   for (const candidate of [...new Set(candidates)]) {
     try {
-      await execFileAsync('git', ['-C', repositoryPath, 'rev-parse', '--verify', `${candidate}^{commit}`], { maxBuffer: 1024 * 1024 })
+      await execFileAsync(
+        'git',
+        ['-C', repositoryPath, 'rev-parse', '--verify', `${candidate}^{commit}`],
+        { maxBuffer: 1024 * 1024 }
+      )
       return candidate
     } catch {
       // Try the next candidate.
@@ -150,7 +162,7 @@ async function resolveGitRevision(repositoryPath: string, branch?: string): Prom
 }
 
 async function generateAiReport(payload: AiGeneratePayload): Promise<string> {
-  const { config, systemPrompt, userPrompt } = payload
+  const { config, requestId, systemPrompt, userPrompt } = payload
   if (!config.baseUrl.trim()) throw new Error('API endpoint is required')
   if (!config.model.trim()) throw new Error('Model name is required')
 
@@ -163,19 +175,31 @@ async function generateAiReport(payload: AiGeneratePayload): Promise<string> {
   }
 
   const endpoint = normalizeChatCompletionsUrl(config.baseUrl)
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: config.model.trim(),
-      temperature: Number(config.temperature),
-      max_tokens: Number(config.maxTokens),
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ]
+  const controller = new AbortController()
+  if (requestId) aiRequestControllers.set(requestId, controller)
+
+  let response: Response
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: config.model.trim(),
+        temperature: Number(config.temperature),
+        max_tokens: Number(config.maxTokens),
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ]
+      })
     })
-  })
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error('AI request canceled')
+    throw error
+  } finally {
+    if (requestId) aiRequestControllers.delete(requestId)
+  }
 
   const text = await response.text()
   let data: unknown
@@ -188,15 +212,28 @@ async function generateAiReport(payload: AiGeneratePayload): Promise<string> {
 
   if (!response.ok) {
     const apiMessage = extractApiError(data)
-    const message = response.status === 404
-      ? apiMessage || `API request failed with 404. Checked endpoint: ${endpoint}`
-      : apiMessage || `API request failed with ${response.status}. Checked endpoint: ${endpoint}`
+    const message =
+      response.status === 404
+        ? apiMessage || `API request failed with 404. Checked endpoint: ${endpoint}`
+        : apiMessage || `API request failed with ${response.status}. Checked endpoint: ${endpoint}`
     throw new Error(message)
   }
 
   const content = extractAiContent(data)
   if (!content) throw new Error('No content returned from model')
   return content
+}
+
+function cancelAiRequests(requestIdPrefix: string): number {
+  let canceled = 0
+  for (const [requestId, controller] of aiRequestControllers.entries()) {
+    if (requestId === requestIdPrefix || requestId.startsWith(`${requestIdPrefix}:`)) {
+      controller.abort()
+      aiRequestControllers.delete(requestId)
+      canceled += 1
+    }
+  }
+  return canceled
 }
 
 async function testAiConfig(config: AiConfig): Promise<string> {
@@ -250,9 +287,7 @@ async function loadWorkspaceData(): Promise<unknown | null> {
 async function exportReport(payload: ExportPayload): Promise<string | null> {
   const safeTitle = sanitizeFileName(payload.title || 'AI Report')
   const extension = payload.format
-  const filters = [
-    { name: `${payload.format.toUpperCase()} File`, extensions: [extension] }
-  ]
+  const filters = [{ name: `${payload.format.toUpperCase()} File`, extensions: [extension] }]
 
   const result = await dialog.showSaveDialog({
     title: 'Export Report',
@@ -287,7 +322,9 @@ async function exportPdf(filePath: string, title: string, html: string): Promise
   })
 
   try {
-    await pdfWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildStandaloneHtml(title, html))}`)
+    await pdfWindow.loadURL(
+      `data:text/html;charset=utf-8,${encodeURIComponent(buildStandaloneHtml(title, html))}`
+    )
     const pdf = await pdfWindow.webContents.printToPDF({ printBackground: true })
     await writeFile(filePath, pdf)
   } finally {
@@ -431,9 +468,16 @@ app.whenReady().then(() => {
     return result.filePaths[0]
   })
 
-  ipcMain.handle('git:read-branches', async (_, repositoryPath: string) => readGitBranches(repositoryPath))
+  ipcMain.handle('git:read-branches', async (_, repositoryPath: string) =>
+    readGitBranches(repositoryPath)
+  )
   ipcMain.handle('git:read-commits', async (_, options: GitReadOptions) => readGitCommits(options))
-  ipcMain.handle('ai:generate-report', async (_, payload: AiGeneratePayload) => generateAiReport(payload))
+  ipcMain.handle('ai:generate-report', async (_, payload: AiGeneratePayload) =>
+    generateAiReport(payload)
+  )
+  ipcMain.handle('ai:cancel-requests', async (_, requestIdPrefix: string) =>
+    cancelAiRequests(requestIdPrefix)
+  )
   ipcMain.handle('ai:test-config', async (_, config: AiConfig) => testAiConfig(config))
   ipcMain.handle('config:save-ai', async (_, config: AiConfig) => saveSecureAiConfig(config))
   ipcMain.handle('config:load-ai', async () => loadSecureAiConfig())
@@ -455,4 +499,3 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
-

@@ -35,6 +35,7 @@ type AiConfig = {
 }
 
 type AiGeneratePayload = {
+  requestId?: string
   config: AiConfig
   systemPrompt: string
   userPrompt: string
@@ -52,16 +53,23 @@ type ExportPayload = {
 
 const api = {
   selectRepository: (): Promise<string | null> => ipcRenderer.invoke('git:select-repository'),
-  readBranches: (repositoryPath: string): Promise<BranchInfo> => ipcRenderer.invoke('git:read-branches', repositoryPath),
-  readCommits: (options: GitReadOptions): Promise<GitCommit[]> => ipcRenderer.invoke('git:read-commits', options),
-  generateAiReport: (payload: AiGeneratePayload): Promise<string> => ipcRenderer.invoke('ai:generate-report', payload),
+  readBranches: (repositoryPath: string): Promise<BranchInfo> =>
+    ipcRenderer.invoke('git:read-branches', repositoryPath),
+  readCommits: (options: GitReadOptions): Promise<GitCommit[]> =>
+    ipcRenderer.invoke('git:read-commits', options),
+  generateAiReport: (payload: AiGeneratePayload): Promise<string> =>
+    ipcRenderer.invoke('ai:generate-report', payload),
+  cancelAiRequests: (requestIdPrefix: string): Promise<number> =>
+    ipcRenderer.invoke('ai:cancel-requests', requestIdPrefix),
   testAiConfig: (config: AiConfig): Promise<string> => ipcRenderer.invoke('ai:test-config', config),
   saveAiConfig: (config: AiConfig): Promise<void> => ipcRenderer.invoke('config:save-ai', config),
   loadAiConfig: (): Promise<Partial<AiConfig> | null> => ipcRenderer.invoke('config:load-ai'),
   saveWorkspace: (data: unknown): Promise<void> => ipcRenderer.invoke('workspace:save', data),
   loadWorkspace: (): Promise<unknown | null> => ipcRenderer.invoke('workspace:load'),
-  exportReport: (payload: ExportPayload): Promise<string | null> => ipcRenderer.invoke('report:export', payload),
-  showItemInFolder: (filePath: string): Promise<void> => ipcRenderer.invoke('shell:show-item', filePath),
+  exportReport: (payload: ExportPayload): Promise<string | null> =>
+    ipcRenderer.invoke('report:export', payload),
+  showItemInFolder: (filePath: string): Promise<void> =>
+    ipcRenderer.invoke('shell:show-item', filePath),
   getSystemLocale: (): Promise<string> => ipcRenderer.invoke('app:get-locale')
 }
 
