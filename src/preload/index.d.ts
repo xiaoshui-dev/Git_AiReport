@@ -61,6 +61,7 @@ export type AiReportApi = {
   loadWorkspace: () => Promise<unknown | null>
   exportReport: (payload: ExportPayload) => Promise<string | null>
   showItemInFolder: (filePath: string) => Promise<void>
+  getSystemLocale: () => Promise<string>
 }
 
 declare global {

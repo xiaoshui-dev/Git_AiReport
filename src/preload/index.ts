@@ -61,7 +61,8 @@ const api = {
   saveWorkspace: (data: unknown): Promise<void> => ipcRenderer.invoke('workspace:save', data),
   loadWorkspace: (): Promise<unknown | null> => ipcRenderer.invoke('workspace:load'),
   exportReport: (payload: ExportPayload): Promise<string | null> => ipcRenderer.invoke('report:export', payload),
-  showItemInFolder: (filePath: string): Promise<void> => ipcRenderer.invoke('shell:show-item', filePath)
+  showItemInFolder: (filePath: string): Promise<void> => ipcRenderer.invoke('shell:show-item', filePath),
+  getSystemLocale: (): Promise<string> => ipcRenderer.invoke('app:get-locale')
 }
 
 if (process.contextIsolated) {

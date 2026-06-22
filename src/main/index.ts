@@ -441,6 +441,7 @@ app.whenReady().then(() => {
   ipcMain.handle('workspace:load', async () => loadWorkspaceData())
   ipcMain.handle('report:export', async (_, payload: ExportPayload) => exportReport(payload))
   ipcMain.handle('shell:show-item', async (_, filePath: string) => shell.showItemInFolder(filePath))
+  ipcMain.handle('app:get-locale', async () => app.getLocale())
 
   createWindow()
 

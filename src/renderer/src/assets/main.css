@@ -387,6 +387,33 @@ textarea::placeholder {
   flex: 1 1 auto;
   min-width: 8px;
 }
+
+.quick-settings {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.quick-field {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 160px);
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.quick-field.compact {
+  grid-template-columns: auto 64px;
+}
+
+.quick-field input,
+.quick-field select {
+  min-height: 26px;
+  padding: 2px 7px;
+}
 .metrics-bar {
   display: grid;
   grid-template-columns: repeat(6, minmax(72px, auto)) minmax(0, 1fr);
@@ -851,6 +878,13 @@ textarea::placeholder {
   font-weight: 700;
 }
 
+.settings-hint {
+  margin: -4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .modal-footer {
   justify-content: flex-end;
   border-top: 1px solid var(--border-soft);
@@ -891,6 +925,11 @@ textarea::placeholder {
 
   .commandbar-group {
     flex: 1 1 auto;
+  }
+
+  .quick-settings {
+    flex: 1 1 auto;
+    justify-content: flex-end;
   }
 
   .metrics-bar {
@@ -1083,6 +1122,17 @@ textarea::placeholder {
     display: none;
   }
 
+  .quick-settings {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 0.6fr);
+  }
+
+  .quick-field,
+  .quick-field.compact {
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  }
+
   .metrics-bar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1145,6 +1195,7 @@ textarea::placeholder {
   }
 
   .commandbar-group,
+  .quick-settings,
   .editor-actions,
   .toolbar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
