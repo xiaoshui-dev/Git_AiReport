@@ -1,0 +1,7 @@
+node_modules
+dist
+out
+electron-app
+.DS_Store
+.eslintcache
+*.log*
